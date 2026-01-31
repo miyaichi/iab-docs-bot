@@ -231,9 +231,14 @@ Create Pub/Sub push subscription with OIDC token:
 WORKER_URL=$(gcloud run services describe slack-worker --region "$REGION" --format='value(status.url)')
 
 gcloud pubsub subscriptions create slack-events-push \
-  --topic "$TOPIC" \
   --push-endpoint "$WORKER_URL/pubsub/push" \
   --push-auth-service-account "slack-worker-sa@$PROJECT_ID.iam.gserviceaccount.com"
+
+# Allow the service account to invoke the worker service
+gcloud run services add-iam-policy-binding slack-worker \
+  --region "$REGION" \
+  --member="serviceAccount:slack-worker-sa@$PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
 ```
 
 > The worker should validate the Pub/Sub push JWT (recommended) and parse the Pub/Sub message body.
