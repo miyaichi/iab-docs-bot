@@ -42,8 +42,9 @@ fi
 PROJECT_ID="${GCP_PROJECT:-}"
 REGION="${GCP_REGION:-asia-northeast1}"
 TOPIC="${PUBSUB_TOPIC:-slack-events}"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-3-flash-preview}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.0-flash}"
 MCP_URL="${MCP_URL:-https://iab-docs.apti.jp/mcp}"
+PROJECT_NUM="${GCP_PROJECT_NUMBER:-$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)' 2>/dev/null || true)}"
 
 # Service account names
 INGEST_SA="slack-ingest-sa"
@@ -172,6 +173,7 @@ deploy_ingest() {
     --source . \
     --allow-unauthenticated \
     --service-account "${INGEST_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    ${PROJECT_NUM:+--build-service-account "${PROJECT_NUM}@cloudbuild.gserviceaccount.com"} \
     --set-env-vars "PUBSUB_TOPIC=$TOPIC" \
     --memory 256Mi \
     --cpu 1 \
@@ -198,6 +200,7 @@ deploy_worker() {
     --source . \
     --no-allow-unauthenticated \
     --service-account "${WORKER_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    ${PROJECT_NUM:+--build-service-account "${PROJECT_NUM}@cloudbuild.gserviceaccount.com"} \
     --set-env-vars "GCP_PROJECT=$PROJECT_ID,GEMINI_MODEL=$GEMINI_MODEL,MCP_URL=$MCP_URL" \
     --memory 512Mi \
     --cpu 1 \
