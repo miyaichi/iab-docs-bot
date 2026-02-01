@@ -49,6 +49,7 @@ project_roles=(
   roles/secretmanager.admin
   roles/cloudbuild.builds.editor
   roles/serviceusage.serviceUsageConsumer
+  roles/pubsub.admin
 )
 
 check_roles "$DEPLOY_SA" "${project_roles[@]}"
