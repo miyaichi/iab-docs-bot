@@ -310,7 +310,7 @@ gcloud run deploy slack-worker \
   --source . \
   --no-allow-unauthenticated \
   --service-account "slack-worker-sa@$PROJECT_ID.iam.gserviceaccount.com" \
-  --set-env-vars "GCP_PROJECT=$PROJECT_ID,GEMINI_MODEL=gemini-2.0-flash,MCP_URL=https://iab-docs.apti.jp/mcp" \
+  --set-env-vars "GCP_PROJECT=$PROJECT_ID,GEMINI_MODEL=gemini-3-flash-preview,MCP_URL=https://iab-docs.apti.jp/mcp" \
   --memory 512Mi \
   --timeout 60s
 
@@ -406,7 +406,7 @@ gcloud run services add-iam-policy-binding slack-ingest \
 ### Gemini model not found
 
 Google AI Studio API を使用しているため、`GEMINI_API_KEY` が正しく設定されていることを確認。
-利用可能なモデル: `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-1.5-pro` など。
+利用可能なモデル: `gemini-3-flash-preview` `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-1.5-pro` など。
 
 ---
 
@@ -421,11 +421,11 @@ Google AI Studio API を使用しているため、`GEMINI_API_KEY` が正しく
 
 # Features to add
 
-1. キャッシュ機能 - 同じ質問への回答をFirestoreにキャッシュしてコスト削減
-2. エラー通知 - Slackでエラー発生時にユーザーへフィードバック
-3. テストコード - 単体テスト/統合テスト
-4. モニタリング - Cloud Monitoringでアラート設定
-5. レート制限 - 過剰なリクエストへの対策  
+1. レスポンスキャッシュ: Firestore に TTL 付きで保存し、同じ質問への再回答を高速化しつつドキュメント更新時の無効化手順を整備
+2. エラー通知とフォールバック: worker 失敗時に Slack スレッドへ簡易返信し、Sentry 等へのアラート通知を追加
+3. テストとローカル検証: Slack 署名検証・Pub/Sub push・MCP/Gemini をモックした単体/統合テストとローカル実行手順
+4. モニタリングと運用: 構造化ログ、メトリクス/ダッシュボード、Pub/Sub DLQ、Cloud Monitoring アラートの整備
+5. レート制限と防御: ユーザー/チャネル単位の QPS 制御、Gemini 呼び出しのリトライとバックオフ  
 
 
 ---

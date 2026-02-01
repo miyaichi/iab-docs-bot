@@ -42,7 +42,7 @@ fi
 PROJECT_ID="${GCP_PROJECT:-}"
 REGION="${GCP_REGION:-asia-northeast1}"
 TOPIC="${PUBSUB_TOPIC:-slack-events}"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.0-flash}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3-flash-preview}"
 MCP_URL="${MCP_URL:-https://iab-docs.apti.jp/mcp}"
 
 # Service account names

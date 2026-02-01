@@ -1,0 +1,58 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT }}
+
+      - name: Prepare deploy environment file
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+          PUBSUB_TOPIC: ${{ secrets.PUBSUB_TOPIC }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          MCP_URL: ${{ secrets.MCP_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          cat <<EOF > infra/.env
+          GCP_PROJECT=${GCP_PROJECT}
+          GCP_REGION=${GCP_REGION:-asia-northeast1}
+          PUBSUB_TOPIC=${PUBSUB_TOPIC:-slack-events}
+          GEMINI_MODEL=${GEMINI_MODEL:-gemini-3-flash-preview}
+          MCP_URL=${MCP_URL:-https://iab-docs.apti.jp/mcp}
+          SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+          SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+          GEMINI_API_KEY=${GEMINI_API_KEY}
+          EOF
+
+      - name: Deploy ingest and worker
+        run: |
+          cd infra
+          chmod +x deploy.sh
+          ./deploy.sh setup
+          ./deploy.sh secrets
+          ./deploy.sh all
