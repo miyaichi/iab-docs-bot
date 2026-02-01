@@ -13,7 +13,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      SKIP_SETUP: ${{ secrets.SKIP_SETUP }}
+      SKIP_SETUP: ${{ secrets.SKIP_SETUP || 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,11 +52,15 @@ jobs:
           EOF
 
       - name: Bootstrap GCP (enable APIs, IAM, topics)
-        if: env.SKIP_SETUP != 'true'
+        if: env.SKIP_SETUP == 'false'
         run: |
           cd infra
           chmod +x deploy.sh
           ./deploy.sh setup
+
+      - name: Skip notice (using existing infra)
+        if: env.SKIP_SETUP != 'false'
+        run: echo "Skipping setup; ensure APIs/SA/topic are pre-provisioned."
 
       - name: Deploy ingest and worker
         run: |
