@@ -12,6 +12,8 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      SKIP_SETUP: ${{ secrets.SKIP_SETUP }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,17 +44,23 @@ jobs:
           GCP_PROJECT=${GCP_PROJECT}
           GCP_REGION=${GCP_REGION:-asia-northeast1}
           PUBSUB_TOPIC=${PUBSUB_TOPIC:-slack-events}
-          GEMINI_MODEL=${GEMINI_MODEL:-gemini-3-flash-preview}
+          GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash}
           MCP_URL=${MCP_URL:-https://iab-docs.apti.jp/mcp}
           SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
           SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
           GEMINI_API_KEY=${GEMINI_API_KEY}
           EOF
 
-      - name: Deploy ingest and worker
+      - name: Bootstrap GCP (enable APIs, IAM, topics)
+        if: env.SKIP_SETUP != 'true'
         run: |
           cd infra
           chmod +x deploy.sh
           ./deploy.sh setup
+
+      - name: Deploy ingest and worker
+        run: |
+          cd infra
+          chmod +x deploy.sh
           ./deploy.sh secrets
           ./deploy.sh all
