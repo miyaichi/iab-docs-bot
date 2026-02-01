@@ -1,3 +1,4 @@
+import { FunctionDeclaration, SchemaType } from '@google/generative-ai';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
@@ -5,14 +6,6 @@ const MCP_URL = process.env.MCP_URL || 'https://iab-docs.apti.jp/mcp';
 
 let client: Client | null = null;
 
-interface SearchResult {
-  content: string;
-  sources: string[];
-}
-
-/**
- * MCPクライアントを初期化して接続
- */
 async function getClient(): Promise<Client> {
   if (client) {
     return client;
@@ -24,76 +17,93 @@ async function getClient(): Promise<Client> {
   await client.connect(transport);
   console.log(`Connected to MCP server: ${MCP_URL}`);
 
-  // 利用可能なツールを確認
-  const { tools } = await client.listTools();
-  console.log(
-    'Available tools:',
-    tools.map((t) => t.name),
-  );
-
   return client;
 }
 
-/**
- * MCPサーバーでドキュメントを検索
- */
-export async function searchDocuments(query: string): Promise<SearchResult> {
-  const mcpClient = await getClient();
-
-  // 利用可能なツールを再確認
-  const { tools } = await mcpClient.listTools();
-  console.log(
-    `Available MCP tools: ${JSON.stringify(tools.map((t) => ({ name: t.name, description: t.description })))}`,
-  );
-
-  // searchツールを探す（大文字小文字を区別しない）
-  const searchTool = tools.find(
-    (t) => t.name.toLowerCase().includes('search') || t.name.toLowerCase().includes('query'),
-  );
-
-  if (!searchTool) {
-    console.error(`No search tool found. Available tools: ${tools.map((t) => t.name).join(', ')}`);
-    return { content: '', sources: [] };
+function mapSchemaType(type: string): SchemaType {
+  switch (type?.toLowerCase()) {
+    case 'string': return SchemaType.STRING;
+    case 'number': return SchemaType.NUMBER;
+    case 'integer': return SchemaType.INTEGER;
+    case 'boolean': return SchemaType.BOOLEAN;
+    case 'array': return SchemaType.ARRAY;
+    case 'object': return SchemaType.OBJECT;
+    default: return SchemaType.STRING;
   }
+}
 
-  console.log(`Using tool: ${searchTool.name} for query: "${query}"`);
+// Convert MCP JSON Schema to Gemini Schema
+function convertSchema(schema: any): any {
+  if (!schema) return undefined;
 
-  const result = await mcpClient.callTool({
-    name: searchTool.name,
-    arguments: {
-      query,
-    },
-  });
+  const result: any = {
+    type: mapSchemaType(schema.type),
+    description: schema.description,
+    nullable: schema.nullable,
+  };
 
-  // レスポンスからテキストを抽出
-  let content = '';
-  const sources: string[] = [];
-
-  if (result.content && Array.isArray(result.content)) {
-    for (const item of result.content) {
-      if (item.type === 'text' && typeof item.text === 'string') {
-        content += item.text + '\n\n';
-
-        // URLを抽出（マークダウンリンク形式）
-        const urlMatches = item.text.match(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g);
-        if (urlMatches) {
-          sources.push(...urlMatches);
-        }
-      }
+  if (schema.properties) {
+    result.properties = {};
+    for (const [key, prop] of Object.entries(schema.properties as Record<string, any>)) {
+      result.properties[key] = convertSchema(prop);
     }
   }
 
-  console.log(`MCP search complete. Content length: ${content.length}, Sources: ${sources.length}`);
+  if (schema.required) {
+    result.required = schema.required;
+  }
 
-  return {
-    content: content.trim(),
-    sources: [...new Set(sources)], // 重複除去
-  };
+  if (schema.items) {
+    result.items = convertSchema(schema.items);
+  }
+
+  if (schema.enum) {
+    result.enum = schema.enum;
+  }
+
+  return result;
 }
 
 /**
- * MCPクライアントを閉じる
+ * Get MCP tools converted to Gemini FunctionDeclarations
  */
+export async function getGeminiTools(): Promise<FunctionDeclaration[]> {
+  const mcpClient = await getClient();
+  const { tools } = await mcpClient.listTools();
+
+  console.log(`Discovered ${tools.length} MCP tools`);
+
+  return tools.map((t) => ({
+    name: t.name,
+    description: t.description || '',
+    parameters: convertSchema(t.inputSchema),
+  }));
+}
+
+/**
+ * Call an MCP tool
+ */
+export async function callMcpTool(name: string, args: any): Promise<any> {
+  const mcpClient = await getClient();
+  console.log(`Calling MCP tool: ${name} with args:`, args);
+
+  const result = await mcpClient.callTool({
+    name,
+    arguments: args,
+  });
+
+  // Extract text content for easier consumption by Gemini
+  const textContent = (result as any).content
+    .filter((c: any) => c.type === 'text')
+    .map((c: any) => c.text)
+    .join('\n\n');
+
+  return {
+    content: textContent || JSON.stringify(result.content),
+    isError: result.isError
+  };
+}
+
 export async function closeClient(): Promise<void> {
   if (client) {
     await client.close();

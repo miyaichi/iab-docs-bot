@@ -1,7 +1,6 @@
-import express, { Request, Response } from 'express';
-import { WebClient } from '@slack/web-api';
 import { Firestore, Timestamp } from '@google-cloud/firestore';
-import { searchDocuments } from './mcp.js';
+import { WebClient } from '@slack/web-api';
+import express, { Request, Response } from 'express';
 import { generateAnswer } from './gemini.js';
 
 const app = express();
@@ -121,27 +120,9 @@ app.post('/pubsub/push', async (req: Request, res: Response) => {
 
     console.log(`Question: "${question}"`);
 
-    // MCPでドキュメントを検索
-    const searchResult = await searchDocuments(question);
-
-    let replyText: string;
-    if (searchResult.content) {
-      // Geminiで回答を生成
-      const geminiResult = await generateAnswer(question, searchResult.content);
-
-      if (geminiResult.success) {
-        replyText = geminiResult.answer;
-      } else {
-        // Geminiエラー時はMCP結果をそのまま返す
-        replyText = `<@${event.user}> さん
-
-${searchResult.content.substring(0, 1500)}${searchResult.content.length > 1500 ? '\n\n...(省略)' : ''}`;
-      }
-    } else {
-      replyText = `<@${event.user}> さん
-
-ドキュメント内で「${question}」に該当する情報が見つかりませんでした。別のキーワードで試してみてください。`;
-    }
+    // Agentic RAG: Gemini decides which tools to use and answers
+    const geminiResult = await generateAnswer(question);
+    const replyText = geminiResult.answer;
 
     await replyToSlack(event.channel, event.thread_ts, replyText);
     console.log(`Reply sent: event_id=${event.event_id}`);
